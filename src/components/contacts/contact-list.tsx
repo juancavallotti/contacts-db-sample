@@ -1,5 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import {
+  ClipboardDocumentIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import { deleteContactAction, updateContactAction } from "@/actions/contacts";
 import type { Contact } from "@/domain/contact";
 import {
@@ -7,6 +13,11 @@ import {
   ContactListStateProvider,
   useContactListState,
 } from "@/components/contacts/contact-list-state";
+import {
+  buildContactEmailClipboardText,
+  formatUsPhoneNumber,
+} from "@/shared/contacts/contact-formatters";
+import { validateContactInput } from "@/shared/contacts/contact-validation";
 
 interface ContactListProps {
   contacts: Contact[];
@@ -23,6 +34,13 @@ export function ContactList({ contacts }: ContactListProps) {
 function ContactListContent({ contacts }: ContactListProps) {
   const { state, dispatch } = useContactListState();
   const selected = state.selected;
+  const [editErrors, setEditErrors] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+  }>({});
+  const [editFormError, setEditFormError] = useState<string | null>(null);
+  const [clipboardStatus, setClipboardStatus] = useState<string | null>(null);
 
   if (contacts.length === 0) {
     return (
@@ -39,15 +57,24 @@ function ContactListContent({ contacts }: ContactListProps) {
         {contacts.map((contact) => (
           <article
             key={contact.id}
-            className="flex h-full flex-col justify-between rounded-md border border-zinc-200 p-4"
+            className="relative flex h-full flex-col justify-between rounded-md border border-zinc-200 p-4"
           >
-            <div className="space-y-2">
-              <h3 className="text-base font-semibold text-zinc-900">{contact.name}</h3>
-              <p className="text-sm text-zinc-600">{contact.email}</p>
-              <p className="text-sm text-zinc-600">{contact.phone}</p>
-            </div>
+            <div className="absolute right-3 top-3 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  const text = buildContactEmailClipboardText(contact);
+                  await navigator.clipboard.writeText(text);
+                  setClipboardStatus(`Copied ${contact.name} details`);
+                  setTimeout(() => setClipboardStatus(null), 1500);
+                }}
+                className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                title="Copy contact for email"
+                aria-label={`Copy ${contact.name} for email`}
+              >
+                <ClipboardDocumentIcon className="h-5 w-5" />
+              </button>
 
-            <div className="mt-4 flex gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -56,23 +83,39 @@ function ContactListContent({ contacts }: ContactListProps) {
                     data: { contact },
                   })
                 }
-                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800"
+                className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                title="Edit contact"
+                aria-label={`Edit ${contact.name}`}
               >
-                Edit
+                <PencilSquareIcon className="h-5 w-5" />
               </button>
+
               <form action={deleteContactAction}>
                 <input type="hidden" name="id" value={contact.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
+                  className="rounded-md p-1 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  title="Delete contact"
+                  aria-label={`Delete ${contact.name}`}
                 >
-                  Delete
+                  <TrashIcon className="h-5 w-5" />
                 </button>
               </form>
             </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base font-semibold text-zinc-900">{contact.name}</h3>
+              <p className="text-sm text-zinc-600">{contact.email}</p>
+              <p className="text-sm text-zinc-600">{formatUsPhoneNumber(contact.phone)}</p>
+            </div>
+
+            <div className="mt-4" />
           </article>
         ))}
       </div>
+      {clipboardStatus ? (
+        <p className="mt-3 text-sm text-emerald-700">{clipboardStatus}</p>
+      ) : null}
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -92,6 +135,20 @@ function ContactListContent({ contacts }: ContactListProps) {
 
             <form
               action={async (formData) => {
+                const candidate = {
+                  name: String(formData.get("name") ?? ""),
+                  email: String(formData.get("email") ?? ""),
+                  phone: String(formData.get("phone") ?? ""),
+                };
+                const validated = validateContactInput(candidate);
+                if (!validated.success) {
+                  setEditErrors(validated.errors);
+                  setEditFormError("Please fix validation errors.");
+                  return;
+                }
+
+                setEditErrors({});
+                setEditFormError(null);
                 await updateContactAction(formData);
                 dispatch({ type: ContactListActionType.CLOSE_EDIT_MODAL });
               }}
@@ -108,6 +165,9 @@ function ContactListContent({ contacts }: ContactListProps) {
                   maxLength={120}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
+                {editErrors.name ? (
+                  <span className="text-xs text-red-600">{editErrors.name}</span>
+                ) : null}
               </label>
 
               <label className="flex flex-col gap-1 text-sm text-zinc-700">
@@ -120,6 +180,9 @@ function ContactListContent({ contacts }: ContactListProps) {
                   maxLength={255}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
+                {editErrors.email ? (
+                  <span className="text-xs text-red-600">{editErrors.email}</span>
+                ) : null}
               </label>
 
               <label className="flex flex-col gap-1 text-sm text-zinc-700">
@@ -128,12 +191,18 @@ function ContactListContent({ contacts }: ContactListProps) {
                   name="phone"
                   defaultValue={selected.phone}
                   required
-                  maxLength={50}
+                  maxLength={20}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
+                {editErrors.phone ? (
+                  <span className="text-xs text-red-600">{editErrors.phone}</span>
+                ) : null}
               </label>
 
               <div className="mt-2 flex justify-end gap-2">
+                {editFormError ? (
+                  <p className="mr-auto text-sm text-red-600">{editFormError}</p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() =>

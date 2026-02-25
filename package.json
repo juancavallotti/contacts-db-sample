@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@eetr/react-reducer-utils": "^0.1.1",
+    "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.19.2",
     "next": "16.1.6",
     "prisma": "^6.19.2",
@@ -28,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

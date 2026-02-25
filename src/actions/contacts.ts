@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import { createContactService } from "@/application/contacts/factory";
 
 function getRequiredText(formData: FormData, key: string): string {
@@ -13,10 +12,15 @@ function getRequiredText(formData: FormData, key: string): string {
 }
 
 function handlePersistenceError(error: unknown): never {
-  if (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
-  ) {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+      ? error.code
+      : undefined;
+
+  if (code === "P2002") {
     throw new Error("A contact with this email already exists.");
   }
 

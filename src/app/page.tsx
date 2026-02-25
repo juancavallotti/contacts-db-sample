@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const contacts = await listContactsAction();
+  const databaseUrl = process.env.DATABASE_URL ?? "<undefined>";
 
   return (
     <main className="min-h-screen bg-zinc-100 px-4 py-10">
@@ -14,6 +15,9 @@ export default async function Home() {
           <h1 className="text-3xl font-bold text-zinc-900">Contacts CRUD</h1>
           <p className="mt-1 text-sm text-zinc-600">
             Next.js server actions, SQLite, and layered architecture.
+          </p>
+          <p className="mt-1 font-mono text-xs text-zinc-500">
+            DB: {databaseUrl}
           </p>
         </header>
         <ContactForm />

@@ -20,6 +20,6 @@ spec:
             - name: APP_DB_ENGINE
               value: postgres
             - name: POSTGRES_DATABASE_URL
-              value: postgresql://postgres:example@postgres-rw:5432/postgres?schema=public
+              value: postgresql://postgres:example@postgres-rw:5432/contacts?schema=public
       nodeSelector:
         kubernetes.io/hostname: minikube-m02

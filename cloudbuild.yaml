@@ -43,9 +43,7 @@ steps:
       - -c
       - |
         kubectl delete job contacts-migration --ignore-not-found=true
-        IMAGE="${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}"
-        BASE_IMAGE="us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest"
-        kubectl kustomize ${_K8S_OVERLAY_PATH} | sed "s|${BASE_IMAGE}|${IMAGE}|g" | kubectl apply -f -
+        kubectl kustomize ${_K8S_OVERLAY_PATH} | sed "s|${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:latest|${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}|g" | kubectl apply -f -
         kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
         kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
     env:

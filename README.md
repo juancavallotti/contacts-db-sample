@@ -75,7 +75,8 @@ On matching GitHub push events, Cloud Build (`cloudbuild.yaml`) will:
 3. Get GKE credentials
 4. `kubectl apply -k ${_K8S_OVERLAY_PATH}` (set by Terraform from `deploy_environment`)
 5. `kubectl set image deployment/contacts ...:${SHORT_SHA}`
-6. Wait for rollout success
+6. Run Prisma migrations as a Kubernetes Job (`contacts-migration`) and wait for completion
+7. Wait for rollout success
 
 Trigger behavior by environment:
 
@@ -92,17 +93,27 @@ Trigger behavior by environment:
 gcloud container clusters get-credentials contacts-autopilot --region us-west1 --project <project_id>
 kubectl get pods,svc
 kubectl rollout status deployment/contacts
+```
+
+Additional checks for `prod`:
+
+```bash
 kubectl get ingress contacts-ingress
 kubectl get managedcertificate contacts-cert
 terraform output ingress_static_ip_address
 dig +short contacts.eetr.app
 ```
 
-Expected checks:
+Expected checks for `prod`:
 
 - `kubectl get ingress contacts-ingress` shows the same external IP as `terraform output ingress_static_ip_address`.
 - `dig +short contacts.eetr.app` resolves to that same IP (DNS propagation can take a few minutes).
 - `kubectl get managedcertificate contacts-cert` eventually reports status `Active`.
+
+Expected checks for `dev`:
+
+- `kubectl get svc contacts` shows `TYPE=LoadBalancer`.
+- `EXTERNAL-IP` is assigned and can be used for direct external access.
 
 #### 5) Teardown
 
@@ -192,8 +203,9 @@ Run container:
 docker run --rm -p 3000:3000 -v "$(pwd)/prisma/data:/app/prisma/data" contacts-db-sample
 ```
 
-The container starts by running `prisma migrate deploy`, then starts Next.js.
+The container starts Next.js directly (`node server.js`).
 
+In Kubernetes, Prisma migrations are run by the `contacts-migration` Job during Cloud Build deploys.
 Use Postgres in Docker/K8s by overriding env vars:
 
 ```bash

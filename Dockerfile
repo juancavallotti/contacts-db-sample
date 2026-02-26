@@ -30,4 +30,4 @@ RUN mkdir -p prisma/data
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "if [ \"$APP_DB_ENGINE\" = \"postgres\" ]; then npx prisma migrate deploy --schema prisma/postgres/schema.prisma; else npx prisma migrate deploy --schema prisma/sqlite/schema.prisma; fi && node server.js"]
+CMD ["node", "server.js"]

@@ -1,20 +1,12 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: contacts
+  name: contacts-migration
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: contacts
   template:
-    metadata:
-      labels:
-        app: contacts
     spec:
       containers:
-        - name: contacts
-          image: us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest
+        - name: migration
           env:
             - name: APP_DB_ENGINE
               value: sqlite

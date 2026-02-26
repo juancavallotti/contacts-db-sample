@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: contacts-migration
+spec:
+  backoffLimit: 3
+  suspend: true
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+        - name: migration
+          image: us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest
+          command:
+            - sh
+            - -c
+            - >
+              if [ "$APP_DB_ENGINE" = "postgres" ]; then
+                npx prisma migrate deploy --schema prisma/postgres/schema.prisma;
+              else
+                npx prisma migrate deploy --schema prisma/sqlite/schema.prisma;
+              fi
+      restartPolicy: OnFailure

@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: contacts-migration
+spec:
+  template:
+    spec:
+      containers:
+        - name: migration
+          env:
+            - name: APP_DB_ENGINE
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: APP_DB_ENGINE
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_NAME
+            - name: DB_SCHEMA
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_SCHEMA
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: contacts-db-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)

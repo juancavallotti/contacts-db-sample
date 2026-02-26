@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: contacts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: contacts
+  template:
+    metadata:
+      labels:
+        app: contacts
+    spec:
+      containers:
+        - name: contacts
+          image: us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest

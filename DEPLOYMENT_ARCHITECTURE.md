@@ -7,8 +7,10 @@ This document describes how deployments work for both `dev` and `prod` in this r
 - A single Cloud Build trigger is provisioned by Terraform.
 - Target environment is selected by Terraform variable `deploy_environment`.
 - Cloud Build maps that value to `_K8S_OVERLAY_PATH = k8s/overlays/<env>`.
+- Kubernetes manifests are layered with a shared base and env-specific overlays:
+  - `k8s/base` defines shared app resources (`Deployment/contacts`, `Service/contacts`, `Job/contacts-migration`).
 - Runtime differences are defined in Kubernetes overlays:
-  - `k8s/overlays/dev` uses SQLite with a PVC.
+  - `k8s/overlays/dev` uses SQLite with a PVC and exposes `Service/contacts` as `LoadBalancer`.
   - `k8s/overlays/prod` uses Postgres with StatefulSet, services, ingress, and managed certificate.
 
 ## CI/CD Flow (Shared)
@@ -21,7 +23,19 @@ flowchart LR
   pushStep --> getCreds["Get GKE credentials"]
   getCreds --> applyOverlay["kubectl apply -k k8s/overlays/<env>"]
   applyOverlay --> setImage["kubectl set image deployment/contacts :SHORT_SHA"]
-  setImage --> rollout["kubectl rollout status deployment/contacts"]
+  setImage --> runMigration["Run Job contacts-migration"]
+  runMigration --> waitMigration["kubectl wait job/contacts-migration complete"]
+  waitMigration --> rollout["kubectl rollout status deployment/contacts"]
+```
+
+## Kustomize Layering
+
+```mermaid
+flowchart TB
+  base["k8s/base"] --> devOverlay["k8s/overlays/dev"]
+  base --> prodOverlay["k8s/overlays/prod"]
+  devOverlay --> devRender["Dev rendered manifests"]
+  prodOverlay --> prodRender["Prod rendered manifests"]
 ```
 
 ## Dev Runtime Architecture (`k8s/overlays/dev`)
@@ -42,6 +56,8 @@ flowchart TB
 - App container uses:
   - `APP_DB_ENGINE=sqlite`
   - `SQLITE_DATABASE_URL=file:../data/contacts.db`
+- Migration job uses the same env vars and mounts `sqlite-pvc` at `/app/prisma/data`.
+- `Service/contacts` is patched to `type: LoadBalancer` for direct external access.
 - No ingress, managed certificate, or Postgres resources in this overlay.
 
 ## Prod Runtime Architecture (`k8s/overlays/prod`)
@@ -71,6 +87,7 @@ flowchart TB
 
 - App reads DB host, port, name, schema, and user from `contacts-db-config`.
 - App and Postgres read `POSTGRES_PASSWORD` from `contacts-db-secret`.
+- Migration job reuses the same ConfigMap/Secret env wiring as the app deployment.
 - Ingress host is `contacts.eetr.app`, with GCE ingress annotations and managed TLS certificate.
 
 ## Resource Inventory
@@ -91,13 +108,15 @@ flowchart TB
 ### Kubernetes Dev
 
 - `Deployment/contacts`
-- `Service/contacts`
+- `Service/contacts` (`type: LoadBalancer`)
+- `Job/contacts-migration`
 - `PersistentVolumeClaim/sqlite-pvc`
 
 ### Kubernetes Prod
 
 - `Deployment/contacts`
 - `Service/contacts`
+- `Job/contacts-migration`
 - `ConfigMap/contacts-db-config`
 - `Secret/contacts-db-secret`
 - `Service/postgres` (headless)
@@ -122,13 +141,18 @@ flowchart TB
 - `infra/terraform/main.tf`
 - `infra/terraform/networking.tf`
 - `infra/terraform/kubernetes-secret.tf`
+- `k8s/base/kustomization.yaml`
+- `k8s/base/deployment.yaml`
+- `k8s/base/contacts-service.yaml`
+- `k8s/base/migration-job.yaml`
 - `k8s/overlays/dev/kustomization.yaml`
-- `k8s/overlays/dev/deployment.yaml`
-- `k8s/overlays/dev/contacts-service.yaml`
+- `k8s/overlays/dev/service-patch.yaml`
+- `k8s/overlays/dev/deployment-patch.yaml`
+- `k8s/overlays/dev/migration-job-patch.yaml`
 - `k8s/overlays/dev/pvc.yaml`
 - `k8s/overlays/prod/kustomization.yaml`
-- `k8s/overlays/prod/deployment.yaml`
-- `k8s/overlays/prod/contacts-service.yaml`
+- `k8s/overlays/prod/deployment-patch.yaml`
+- `k8s/overlays/prod/migration-job-patch.yaml`
 - `k8s/overlays/prod/db-configmap.yaml`
 - `k8s/overlays/prod/service.yaml`
 - `k8s/overlays/prod/postgres-service.yaml`

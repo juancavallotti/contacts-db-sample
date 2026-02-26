@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveActiveDatabaseConfig } from "@/persistence/db/config";
+import { redactDatabaseUrl, resolveActiveDatabaseConfig } from "@/persistence/db/config";
 
 describe("resolveActiveDatabaseConfig", () => {
   it("uses sqlite defaults when APP_DB_ENGINE is omitted", () => {
@@ -40,5 +40,33 @@ describe("resolveActiveDatabaseConfig", () => {
         APP_DB_ENGINE: "mysql",
       })
     ).toThrow('Invalid APP_DB_ENGINE value "mysql"');
+  });
+});
+
+describe("redactDatabaseUrl", () => {
+  it("masks password from postgres userinfo", () => {
+    const result = redactDatabaseUrl(
+      "postgresql://postgres:super-secret@postgres-rw:5432/postgres?schema=public"
+    );
+
+    expect(result).toBe(
+      "postgresql://postgres:***@postgres-rw:5432/postgres?schema=public"
+    );
+  });
+
+  it("masks password-like query params", () => {
+    const result = redactDatabaseUrl(
+      "postgresql://postgres@postgres-rw:5432/postgres?password=secret&schema=public"
+    );
+
+    expect(result).toBe(
+      "postgresql://postgres@postgres-rw:5432/postgres?password=***&schema=public"
+    );
+  });
+
+  it("leaves sqlite file URL untouched", () => {
+    const result = redactDatabaseUrl("file:../data/contacts.db");
+
+    expect(result).toBe("file:../data/contacts.db");
   });
 });

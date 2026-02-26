@@ -8,6 +8,34 @@ export interface ActiveDatabaseConfig {
 
 type EnvLike = Record<string, string | undefined>;
 
+const REDACTED_VALUE = "***";
+
+export function redactDatabaseUrl(url: string): string {
+  if (!url.includes("://")) {
+    return url.replace(/(\/\/[^:/?#\s]+:)([^@/?#\s]+)@/g, `$1${REDACTED_VALUE}@`);
+  }
+
+  // Handle standard database URLs first (postgresql://user:pass@host/db).
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.password) {
+      parsed.password = REDACTED_VALUE;
+    }
+
+    for (const key of parsed.searchParams.keys()) {
+      if (/^(password|pass|pwd)$/i.test(key)) {
+        parsed.searchParams.set(key, REDACTED_VALUE);
+      }
+    }
+
+    return parsed.toString();
+  } catch {
+    // Fallback for non-URL formats while still masking userinfo passwords.
+    return url.replace(/(\/\/[^:/?#\s]+:)([^@/?#\s]+)@/g, `$1${REDACTED_VALUE}@`);
+  }
+}
+
 function parseEngine(raw: string | undefined): DbEngine {
   if (!raw || raw === "sqlite") {
     return "sqlite";

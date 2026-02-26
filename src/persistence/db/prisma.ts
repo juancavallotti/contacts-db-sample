@@ -1,6 +1,6 @@
 import { PrismaClient as PostgresPrismaClient } from "@/generated/prisma-postgres";
 import { PrismaClient as SqlitePrismaClient } from "@/generated/prisma-sqlite";
-import { resolveActiveDatabaseConfig } from "@/persistence/db/config";
+import { redactDatabaseUrl, resolveActiveDatabaseConfig } from "@/persistence/db/config";
 
 export type AppPrismaClient = SqlitePrismaClient | PostgresPrismaClient;
 
@@ -28,8 +28,9 @@ function createPrismaClient(): AppPrismaClient {
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (!globalForPrisma.didLogDatabaseUrl) {
+  const redactedDatabaseUrl = redactDatabaseUrl(activeDatabase.url);
   console.log(
-    `[startup] NODE_ENV=${process.env.NODE_ENV ?? "unknown"} cwd=${process.cwd()} APP_DB_ENGINE=${activeDatabase.engine} ${activeDatabase.sourceEnvKey}=${activeDatabase.url}`
+    `[startup] NODE_ENV=${process.env.NODE_ENV ?? "unknown"} cwd=${process.cwd()} APP_DB_ENGINE=${activeDatabase.engine} ${activeDatabase.sourceEnvKey}=${redactedDatabaseUrl}`
   );
   globalForPrisma.didLogDatabaseUrl = true;
 }

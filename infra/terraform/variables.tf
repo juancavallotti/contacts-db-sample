@@ -42,7 +42,7 @@ variable "github_owner" {
 variable "github_repo" {
   description = "GitHub repository name."
   type        = string
-  default     = "contacts-db-sample"
+  default     = "k8s-gcp-reference-architecture"
 }
 
 variable "trigger_branch_regex" {

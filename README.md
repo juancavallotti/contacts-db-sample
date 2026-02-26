@@ -241,74 +241,25 @@ Use Postgres in Docker/K8s by overriding env vars:
 
 ## Minikube
 
-You can run the app on local Kubernetes (minikube) in two ways: **Kustomize** (overlay-based) or **Helm** (chart-based). Both use the same image build step; only the deploy and migration steps differ.
-
-Run all commands from the repository root.
-
----
+You can run the app on local Kubernetes (minikube) in two ways: **Kustomize** (overlay-based) or **Helm** (chart-based). Both use the same image build step; only the deploy and migration steps differ. Run all commands from the repository root.
 
 ### Run on Minikube with Kustomize
 
-1. **Start minikube**
-   ```bash
-   minikube start
-   ```
+1. Start minikube: `minikube start`
+2. Build the image and load it into minikube: `./scripts/minikube-build-and-load.sh`
+3. Apply the minikube overlay, set the local image on the deployment and migration job, run the migration job, and wait for rollout: `./scripts/minikube-apply-and-migrate.sh`
+4. Get the app URL: `minikube service contacts --url`
 
-2. **Build the image and load it into minikube**
-   ```bash
-   ./scripts/minikube-build-and-load.sh
-   ```
-   Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh`
-
-3. **Apply the minikube overlay**
-   ```bash
-   kubectl apply -k k8s/overlays/minikube
-   ```
-
-4. **Use the local image tag for the app and migration job**
-   ```bash
-   kubectl set image deployment/contacts contacts=contacts-db-sample:local
-   kubectl set image job/contacts-migration migration=contacts-db-sample:local
-   ```
-
-5. **Run the migration job and wait for it to finish**
-   ```bash
-   kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
-   kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
-   kubectl rollout status deployment/contacts --timeout=300s
-   ```
-
-6. **Get the app URL**
-   ```bash
-   minikube service contacts --url
-   ```
-   Open the URL in a browser or call `curl $(minikube service contacts --url)/api/healthcheck`.
-
----
+Optional overrides for image name/tag: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh` (and same for the apply script).
 
 ### Run on Minikube with Helm
 
-1. **Start minikube**
-   ```bash
-   minikube start
-   ```
+1. Start minikube: `minikube start`
+2. Build the image and load it into minikube: `./scripts/minikube-build-and-load.sh`
+3. Deploy with Helm (using `values-minikube.yaml`) and run the migration job: `./scripts/minikube-helm-apply-and-migrate.sh`
+4. Get the app URL: `minikube service contacts --url`
 
-2. **Build the image and load it into minikube**
-   ```bash
-   ./scripts/minikube-build-and-load.sh
-   ```
-   Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh`
-
-3. **Deploy with Helm and run migrations**
-   ```bash
-   ./scripts/minikube-helm-apply-and-migrate.sh
-   ```
-   This runs `helm upgrade --install` with `helm/contacts/values-minikube.yaml` and the same image tag as step 2, then unsuspends the migration job and waits for completion. Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-helm-apply-and-migrate.sh`
-
-4. **Get the app URL**
-   ```bash
-   minikube service contacts --url
-   ```
+Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local` for both scripts.
 
 ---
 
@@ -334,14 +285,14 @@ For **Cloud Build** with the commented Helm deploy: CI must supply `values-dev.y
 Target remote:
 
 ```bash
-git@github.com:juancavallotti/contacts-db-sample.git
+git@github.com:juancavallotti/k8s-gcp-reference-architecture.git
 ```
 
 Suggested push flow:
 
 ```bash
 git init
-git remote add origin git@github.com:juancavallotti/contacts-db-sample.git
+git remote add origin git@github.com:juancavallotti/k8s-gcp-reference-architecture.git
 git add .
 git commit -m "feat: create contacts CRUD app with Next.js, server actions and SQLite"
 git branch -M main

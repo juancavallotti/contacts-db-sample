@@ -2,7 +2,8 @@
 
 Next.js 16 + Tailwind CSS contacts CRUD app using:
 
-- server actions (no API routes)
+- server actions for CRUD flows
+- one API route for infrastructure health checks: `GET /api/healthcheck`
 - SQLite or Postgres with Prisma
 - 3-layer architecture:
   - Presentation: `src/app`, `src/components`, `src/actions`
@@ -174,6 +175,18 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+Healthcheck endpoint (end-to-end app + DB check):
+
+```bash
+curl -s http://localhost:3000/api/healthcheck
+```
+
+Expected behavior:
+
+- HTTP `200` when DB query succeeds, including empty table.
+- Response payload includes `contacts` as a list with up to one row (latest contact).
+- HTTP `500` when DB connectivity/query fails.
 
 ## Validation
 

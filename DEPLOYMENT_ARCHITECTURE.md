@@ -9,6 +9,7 @@ This document describes how deployments work for both `dev` and `prod` in this r
 - Cloud Build maps that value to `_K8S_OVERLAY_PATH = k8s/overlays/<env>`.
 - Kubernetes manifests are layered with a shared base and env-specific overlays:
   - `k8s/base` defines shared app resources (`Deployment/contacts`, `Service/contacts`, `Job/contacts-migration`).
+- Base app deployment defines HTTP health probes (`liveness`, `readiness`, `startup`) against `GET /api/healthcheck`.
 - Runtime differences are defined in Kubernetes overlays:
   - `k8s/overlays/dev` uses SQLite with a PVC and exposes `Service/contacts` as `LoadBalancer`.
   - `k8s/overlays/prod` uses Postgres with StatefulSet, services, ingress, and managed certificate.
@@ -56,6 +57,7 @@ flowchart TB
 - App container uses:
   - `APP_DB_ENGINE=sqlite`
   - `SQLITE_DATABASE_URL=file:../data/contacts.db`
+- Base `Deployment/contacts` health probes call `/api/healthcheck` on container port `3000`.
 - Migration job uses the same env vars and mounts `sqlite-pvc` at `/app/prisma/data`.
 - `Service/contacts` is patched to `type: LoadBalancer` for direct external access.
 - No ingress, managed certificate, or Postgres resources in this overlay.
@@ -87,6 +89,7 @@ flowchart TB
 
 - App reads DB host, port, name, schema, and user from `contacts-db-config`.
 - App and Postgres read `POSTGRES_PASSWORD` from `contacts-db-secret`.
+- Base `Deployment/contacts` health probes call `/api/healthcheck` on container port `3000`.
 - Migration job reuses the same ConfigMap/Secret env wiring as the app deployment.
 - Ingress host is `contacts.eetr.app`, with GCE ingress annotations and managed TLS certificate.
 

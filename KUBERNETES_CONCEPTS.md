@@ -36,6 +36,20 @@ Files: `overlays/dev/deployment.yaml`, `overlays/prod/deployment.yaml` (resource
 - The image is pulled from Artifact Registry:
   - `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest`
 - This manifest does not currently set `nodeSelector` or `imagePullPolicy`, so normal cluster scheduling and default image pull behavior apply.
+- The base deployment now defines:
+  - container port `3000` (named `http`)
+  - `startupProbe`, `readinessProbe`, and `livenessProbe` using `GET /api/healthcheck`
+  - probes validate end-to-end app functionality because the route performs a DB query (`contacts` ordered desc, `take: 1`)
+
+## 2.1) Application health endpoint
+
+File: `src/app/api/healthcheck/route.ts`
+
+`GET /api/healthcheck` is used by Kubernetes probes and intentionally performs a real DB read:
+
+- Query behavior is equivalent to `SELECT * FROM contacts ORDER BY createdAt DESC LIMIT 1`.
+- Response returns `contacts` as a list (`[]` when empty, `[latestContact]` when rows exist).
+- Returns HTTP `200` on successful DB access and HTTP `500` when DB access fails.
 
 ## 3) StatefulSet (stateful database workload)
 

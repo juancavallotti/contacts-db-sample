@@ -13,7 +13,10 @@ export interface DbContact {
 
 export interface AppDbClient {
   contact: {
-    findMany(args: { orderBy: { createdAt: "desc" } }): Promise<DbContact[]>;
+    findMany(args: {
+      orderBy?: { createdAt: "desc" };
+      take?: number;
+    }): Promise<DbContact[]>;
     findUnique(args: { where: { id: string } }): Promise<DbContact | null>;
     create(args: {
       data: { name: string; email: string; phone: string };

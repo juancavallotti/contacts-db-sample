@@ -20,7 +20,7 @@ For a repo-specific explanation of the Kubernetes setup and concepts used here, 
 This repo includes Terraform to provision:
 
 - GKE Autopilot cluster
-- IAM bindings for Cloud Build deploy/push
+- Dedicated Cloud Build runner service account and custom IAM role
 - Cloud Build trigger (push to `main`) that builds, pushes, and deploys
 
 Path:
@@ -40,6 +40,7 @@ Set at minimum:
 
 - `project_id` (your GCP project)
 - `artifact_repo_path` (defaults to `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts`)
+- `cloud_build_runner_account_id` (service account id used by the trigger)
 - `db_password` (used by Terraform to create `contacts-db-secret` in the cluster)
 
 #### 2) Create infra
@@ -55,7 +56,7 @@ Terraform creates:
 
 - `google_container_cluster` (Autopilot)
 - `google_cloudbuild_trigger` for `main` pushes
-- IAM roles required by Cloud Build
+- Dedicated service account + custom IAM role required by Cloud Build
 - `kubernetes_secret_v1.contacts_db_secret` (`contacts-db-secret`)
 
 #### 3) CI/CD flow

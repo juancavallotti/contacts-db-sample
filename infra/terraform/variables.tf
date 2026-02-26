@@ -27,6 +27,12 @@ variable "image_name" {
   default     = "contacts-db-sample"
 }
 
+variable "cloud_build_runner_account_id" {
+  description = "Account id for the dedicated Cloud Build runner service account."
+  type        = string
+  default     = "contacts-cloudbuild-runner"
+}
+
 variable "github_owner" {
   description = "GitHub repository owner."
   type        = string

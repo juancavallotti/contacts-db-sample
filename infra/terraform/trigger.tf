@@ -1,6 +1,7 @@
 resource "google_cloudbuild_trigger" "main_push" {
-  project = var.project_id
-  name    = "contacts-main-deploy"
+  project         = var.project_id
+  name            = "contacts-main-deploy"
+  service_account = google_service_account.cloudbuild_runner.id
 
   description = "Build and deploy contacts app to GKE on main branch pushes."
   filename    = "cloudbuild.yaml"
@@ -22,8 +23,8 @@ resource "google_cloudbuild_trigger" "main_push" {
 
   depends_on = [
     google_container_cluster.autopilot,
-    google_project_iam_member.cloudbuild_artifactregistry_writer,
-    google_project_iam_member.cloudbuild_container_developer,
-    google_project_iam_member.cloudbuild_service_account_user,
+    google_project_iam_member.cloudbuild_runner_custom_role,
+    google_service_account_iam_member.allow_legacy_cloudbuild_to_impersonate_runner,
+    google_service_account_iam_member.allow_cloudbuild_service_agent_to_impersonate_runner,
   ]
 }

@@ -1,20 +1,23 @@
 # Deployment Architecture
 
-This document describes how deployments work for both `dev` and `prod` in this repository.
+This document describes how deployments work for `dev`, `prod`, and local minikube in this repository.
 
 ## Scope And Assumptions
 
-- A single Cloud Build trigger is provisioned by Terraform.
+- A single Cloud Build trigger is provisioned by Terraform per environment.
 - Target environment is selected by Terraform variable `deploy_environment`.
 - Cloud Build maps that value to `_K8S_OVERLAY_PATH = k8s/overlays/<env>`.
-- Kubernetes manifests are layered with a shared base and env-specific overlays:
-  - `k8s/base` defines shared app resources (`Deployment/contacts`, `Service/contacts`, `Job/contacts-migration`).
+- Kubernetes manifests are available in two forms:
+  - **Kustomize**: shared base and env-specific overlays (`k8s/base`, `k8s/overlays/{minikube,dev,prod}`).
+  - **Helm**: single chart `helm/contacts` with environment-specific values files (see [Helm chart](#helm-chart)).
 - Base app deployment defines HTTP health probes (`liveness`, `readiness`, `startup`) against `GET /api/healthcheck`.
-- Runtime differences are defined in Kubernetes overlays:
-  - `k8s/overlays/dev` uses SQLite with a PVC and exposes `Service/contacts` as `LoadBalancer`.
-  - `k8s/overlays/prod` uses Postgres with StatefulSet, services, ingress, and managed certificate.
+- Runtime differences (SQLite vs Postgres, service type, ingress) are defined in overlays (Kustomize) or values (Helm).
 
 ## CI/CD Flow (Shared)
+
+The default pipeline uses **Kustomize** to apply overlays. An optional **Helm** deploy path is documented in `cloudbuild.yaml` as a commented-out block.
+
+### Kustomize path (default)
 
 ```mermaid
 flowchart LR
@@ -31,15 +34,57 @@ flowchart LR
 
 **Migration job and immutability:** A Kubernetes Job’s `spec.template` is immutable after creation. The pipeline therefore does not use `kubectl set image` for the migration job. It deletes the existing job (if any), then applies the overlay again with the built image substituted into the manifests (via `kubectl kustomize` + `sed`), so the job is created once with the correct image. Deployment image updates still work via the same re-apply.
 
+### Helm path (optional, commented out)
+
+When enabled, the pipeline would:
+
+1. Install Helm 3 in a step, get GKE credentials, then run `helm upgrade --install contacts ./helm/contacts -f ./helm/contacts/values-<env>.yaml` with image overrides (`--set image.repository=... --set image.tag=${SHORT_SHA}`).
+2. Patch the migration job to unsuspend and wait for completion.
+3. Wait for deployment rollout.
+
+The files `values-dev.yaml` and `values-prod.yaml` are **gitignored**; CI must provide them (e.g. from Secret Manager or a step that writes the file from substitutions) when using the Helm path.
+
 ## Kustomize Layering
 
 ```mermaid
 flowchart TB
-  base["k8s/base"] --> devOverlay["k8s/overlays/dev"]
+  base["k8s/base"] --> minikubeOverlay["k8s/overlays/minikube"]
+  base --> devOverlay["k8s/overlays/dev"]
   base --> prodOverlay["k8s/overlays/prod"]
+  minikubeOverlay --> minikubeRender["Minikube rendered manifests"]
   devOverlay --> devRender["Dev rendered manifests"]
   prodOverlay --> prodRender["Prod rendered manifests"]
 ```
+
+## Helm chart
+
+A Helm chart at `helm/contacts/` mirrors the same runtime behavior as the Kustomize overlays, with one chart and environment-specific values:
+
+- **Committed**: `values.yaml` (defaults), `values-minikube.yaml` (local SQLite, NodePort), `values-dev.sample.yaml`, `values-prod.sample.yaml` (samples only).
+- **Gitignored**: `values-dev.yaml`, `values-prod.yaml` (used at deploy time; CI or users create from samples).
+
+Templates branch on `database.engine` (sqlite vs postgres) and `ingress.enabled`, so the same chart deploys minikube (SQLite + PVC + NodePort), dev (SQLite + LoadBalancer), or prod (Postgres + StatefulSet + Ingress + ManagedCertificate). The Postgres password is not templated; prod relies on the pre-created Secret `contacts-db-secret`.
+
+```mermaid
+flowchart LR
+  subgraph chart [Helm chart]
+    V["values-*.yaml"]
+    T["templates/"]
+    V --> T
+  end
+  T --> minikubeOut["Minikube: SQLite, NodePort"]
+  T --> devOut["Dev: SQLite, LoadBalancer"]
+  T --> prodOut["Prod: Postgres, Ingress"]
+```
+
+**Minikube with Helm:** Use `./scripts/minikube-helm-apply-and-migrate.sh` after `./scripts/minikube-build-and-load.sh`; the script runs `helm upgrade --install` with `values-minikube.yaml` and image overrides, then unsuspends the migration job and waits for completion.
+
+## Minikube (local Kubernetes)
+
+Minikube uses the same app image and SQLite + PVC pattern as dev, with a `NodePort` service for local access.
+
+- **Kustomize**: overlay `k8s/overlays/minikube`; apply with `kubectl apply -k k8s/overlays/minikube`, then update image tags and run migration (see README).
+- **Helm**: `helm/contacts` with `values-minikube.yaml`; use `./scripts/minikube-helm-apply-and-migrate.sh` after building and loading the image with `./scripts/minikube-build-and-load.sh`.
 
 ## Dev Runtime Architecture (`k8s/overlays/dev`)
 
@@ -130,6 +175,13 @@ flowchart TB
 - `Ingress/contacts-ingress`
 - `ManagedCertificate/contacts-cert`
 
+### Minikube (either Kustomize or Helm)
+
+- `Deployment/contacts`
+- `Service/contacts` (`type: NodePort` with Kustomize or Helm)
+- `Job/contacts-migration`
+- `PersistentVolumeClaim/sqlite-pvc`
+
 ## How To Switch Environments
 
 1. Set Terraform variable `deploy_environment` to `dev` or `prod`.
@@ -140,7 +192,7 @@ flowchart TB
 
 ## Source References
 
-- `cloudbuild.yaml`
+- `cloudbuild.yaml` (Kustomize steps + commented Helm block)
 - `infra/terraform/trigger.tf`
 - `infra/terraform/variables.tf`
 - `infra/terraform/main.tf`
@@ -150,6 +202,8 @@ flowchart TB
 - `k8s/base/deployment.yaml`
 - `k8s/base/contacts-service.yaml`
 - `k8s/base/migration-job.yaml`
+- `k8s/overlays/minikube/kustomization.yaml`
+- `k8s/overlays/minikube/*.yaml`
 - `k8s/overlays/dev/kustomization.yaml`
 - `k8s/overlays/dev/service-patch.yaml`
 - `k8s/overlays/dev/deployment-patch.yaml`
@@ -164,3 +218,12 @@ flowchart TB
 - `k8s/overlays/prod/statefulset.yaml`
 - `k8s/overlays/prod/managed-certificate.yaml`
 - `k8s/overlays/prod/ingress.yaml`
+- `helm/contacts/Chart.yaml`
+- `helm/contacts/values.yaml`
+- `helm/contacts/values-minikube.yaml`
+- `helm/contacts/values-dev.sample.yaml`
+- `helm/contacts/values-prod.sample.yaml`
+- `helm/contacts/templates/*.yaml`
+- `scripts/minikube-build-and-load.sh`
+- `scripts/minikube-apply-and-migrate.sh` (Kustomize)
+- `scripts/minikube-helm-apply-and-migrate.sh` (Helm)

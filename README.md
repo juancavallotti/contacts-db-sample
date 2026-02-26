@@ -10,6 +10,22 @@ Next.js 16 + Tailwind CSS contacts CRUD app using:
   - Application: `src/application`
   - Persistence: `src/persistence`
 
+Want to work with me? [Call my agent](https://juancavallotti.com/ai-assistant).
+
+## Prerequisites
+
+Install the following depending on what you want to run:
+
+| What you want to do | Software needed |
+|---------------------|-----------------|
+| **Local development** (run the app with `npm run dev`) | [Node.js](https://nodejs.org/) (v18+; includes npm) |
+| **Docker** (build/run the image locally) | [Docker](https://docs.docker.com/get-docker/) |
+| **Minikube with Kustomize** | [minikube](https://minikube.sigs.k8s.io/docs/start/), [kubectl](https://kubernetes.io/docs/tasks/tools/), Docker (for building and loading the image) |
+| **Minikube with Helm** | Same as above, plus [Helm](https://helm.sh/docs/intro/install/) (v3) |
+| **GKE + Cloud Build** (deploy to dev/prod via Terraform) | [Terraform](https://developer.hashicorp.com/terraform/install), [gcloud CLI](https://cloud.google.com/sdk/docs/install) (for local verification); Cloud Build runs in GCP |
+
+All terminal commands in this README assume you are in the repository root unless noted.
+
 ## Kubernetes
 
 For a repo-specific explanation of the Kubernetes setup and concepts used here, see:
@@ -228,90 +244,85 @@ Use Postgres in Docker/K8s by overriding env vars:
 
 ## Minikube
 
-This repo includes a dedicated overlay at `k8s/overlays/minikube` for local Kubernetes runs with SQLite + PVC and `NodePort` service access.
+You can run the app on local Kubernetes (minikube) in two ways: **Kustomize** (overlay-based) or **Helm** (chart-based). Both use the same image build step; only the deploy and migration steps differ.
 
-### Option A: Kustomize
+Run all commands from the repository root.
 
-1. Start minikube:
+---
 
-```bash
-minikube start
-```
+### Run on Minikube with Kustomize
 
-2. Build and load image into minikube:
+1. **Start minikube**
+   ```bash
+   minikube start
+   ```
 
-```bash
-./scripts/minikube-build-and-load.sh
-```
+2. **Build the image and load it into minikube**
+   ```bash
+   ./scripts/minikube-build-and-load.sh
+   ```
+   Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh`
 
-Optional image overrides:
+3. **Apply the minikube overlay**
+   ```bash
+   kubectl apply -k k8s/overlays/minikube
+   ```
 
-```bash
-IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh
-```
+4. **Use the local image tag for the app and migration job**
+   ```bash
+   kubectl set image deployment/contacts contacts=contacts-db-sample:local
+   kubectl set image job/contacts-migration migration=contacts-db-sample:local
+   ```
 
-3. Apply minikube manifests:
+5. **Run the migration job and wait for it to finish**
+   ```bash
+   kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
+   kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
+   kubectl rollout status deployment/contacts --timeout=300s
+   ```
 
-```bash
-kubectl apply -k k8s/overlays/minikube
-```
+6. **Get the app URL**
+   ```bash
+   minikube service contacts --url
+   ```
+   Open the URL in a browser or call `curl $(minikube service contacts --url)/api/healthcheck`.
 
-4. Point deployment and migration job to local image tag:
+---
 
-```bash
-kubectl set image deployment/contacts contacts=contacts-db-sample:local
-kubectl set image job/contacts-migration migration=contacts-db-sample:local
-```
+### Run on Minikube with Helm
 
-5. Run migration job and wait:
+1. **Start minikube**
+   ```bash
+   minikube start
+   ```
 
-```bash
-kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
-kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
-kubectl rollout status deployment/contacts --timeout=300s
-```
+2. **Build the image and load it into minikube**
+   ```bash
+   ./scripts/minikube-build-and-load.sh
+   ```
+   Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh`
 
-6. Get application URL:
+3. **Deploy with Helm and run migrations**
+   ```bash
+   ./scripts/minikube-helm-apply-and-migrate.sh
+   ```
+   This runs `helm upgrade --install` with `helm/contacts/values-minikube.yaml` and the same image tag as step 2, then unsuspends the migration job and waits for completion. Optional overrides: `IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-helm-apply-and-migrate.sh`
 
-```bash
-minikube service contacts --url
-```
+4. **Get the app URL**
+   ```bash
+   minikube service contacts --url
+   ```
 
-### Option B: Helm
+---
 
-1. Start minikube and build/load the image (same as above):
+### Helm chart and dev/prod values
 
-```bash
-minikube start
-./scripts/minikube-build-and-load.sh
-```
+The repo includes a Helm chart at `helm/contacts/`:
 
-2. Deploy with Helm and run migrations:
+- **Committed:** `values.yaml` (defaults), `values-minikube.yaml` (minikube), and samples `values-dev.sample.yaml`, `values-prod.sample.yaml`.
+- **Gitignored:** `values-dev.yaml`, `values-prod.yaml` (for env-specific or sensitive overrides).
 
-```bash
-./scripts/minikube-helm-apply-and-migrate.sh
-```
-
-Optional image overrides (same as build-and-load):
-
-```bash
-IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-helm-apply-and-migrate.sh
-```
-
-3. Get application URL:
-
-```bash
-minikube service contacts --url
-```
-
-### Helm chart (dev/prod values)
-
-The repo includes a Helm chart under `helm/contacts/` with:
-
-- **Committed**: `values.yaml` (defaults), `values-minikube.yaml` (local), and sample files `values-dev.sample.yaml`, `values-prod.sample.yaml`.
-- **Not committed** (in `.gitignore`): `values-dev.yaml` and `values-prod.yaml`, so environment-specific or sensitive overrides are not stored in the repo.
-
-To use Helm for dev or prod locally (or in CI), copy the sample and fill in:
+To use Helm for dev or prod locally or in CI, copy the sample and edit:
 
 ```bash
 cp helm/contacts/values-dev.sample.yaml helm/contacts/values-dev.yaml
@@ -319,7 +330,7 @@ cp helm/contacts/values-dev.sample.yaml helm/contacts/values-dev.yaml
 helm upgrade --install contacts ./helm/contacts -f ./helm/contacts/values-dev.yaml --set image.tag=YOUR_TAG
 ```
 
-For **Cloud Build** with the commented Helm deploy path: `values-dev.yaml` and `values-prod.yaml` are not in the repo, so CI must provide them (e.g. a step that fetches from Secret Manager and writes the file, or builds the values from substitutions into `helm/contacts/values-<env>.yaml` before the `helm upgrade` step).
+For **Cloud Build** with the commented Helm deploy: CI must supply `values-dev.yaml` or `values-prod.yaml` (e.g. from Secret Manager or a step that writes the file).
 
 ## GitHub repository
 

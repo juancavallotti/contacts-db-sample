@@ -1,0 +1,65 @@
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}
+
+  - id: get-credentials
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - container
+      - clusters
+      - get-credentials
+      - ${_CLUSTER_NAME}
+      - --region
+      - ${_CLUSTER_REGION}
+      - --project
+      - ${PROJECT_ID}
+
+  - id: apply-manifests
+    name: gcr.io/cloud-builders/kubectl
+    args:
+      - apply
+      - -k
+      - .
+    env:
+      - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+      - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+
+  - id: set-image
+    name: gcr.io/cloud-builders/kubectl
+    args:
+      - set
+      - image
+      - deployment/contacts
+      - contacts=${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}
+    env:
+      - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+      - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+
+  - id: rollout
+    name: gcr.io/cloud-builders/kubectl
+    args:
+      - rollout
+      - status
+      - deployment/contacts
+      - --timeout=300s
+    env:
+      - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+      - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+
+images:
+  - ${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

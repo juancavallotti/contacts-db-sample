@@ -15,6 +15,87 @@ For a repo-specific explanation of the Kubernetes setup and concepts used here, 
 
 - `KUBERNETES_CONCEPTS.md`
 
+### GKE + Cloud Build CI/CD (Terraform)
+
+This repo includes Terraform to provision:
+
+- GKE Autopilot cluster
+- IAM bindings for Cloud Build deploy/push
+- Cloud Build trigger (push to `main`) that builds, pushes, and deploys
+
+Path:
+
+```bash
+infra/terraform
+```
+
+#### 1) Configure Terraform variables
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Set at minimum:
+
+- `project_id` (your GCP project)
+- `artifact_repo_path` (defaults to `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts`)
+- `db_password` (used by Terraform to create `contacts-db-secret` in the cluster)
+
+#### 2) Create infra
+
+```bash
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+Terraform creates:
+
+- `google_container_cluster` (Autopilot)
+- `google_cloudbuild_trigger` for `main` pushes
+- IAM roles required by Cloud Build
+- `kubernetes_secret_v1.contacts_db_secret` (`contacts-db-secret`)
+
+#### 3) CI/CD flow
+
+On push to `main`, Cloud Build (`cloudbuild.yaml`) will:
+
+1. Build image: `${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}`
+2. Push image to Artifact Registry
+3. Get GKE credentials
+4. `kubectl apply -k .`
+5. `kubectl set image deployment/contacts ...:${SHORT_SHA}`
+6. Wait for rollout success
+
+#### 4) Verify deployment
+
+```bash
+gcloud container clusters get-credentials contacts-autopilot --region us-west1 --project <project_id>
+kubectl get pods,svc
+kubectl rollout status deployment/contacts
+```
+
+#### 5) Teardown
+
+To remove the resources this Terraform stack created (including the GKE cluster and Cloud Build trigger):
+
+```bash
+cd infra/terraform
+terraform destroy
+```
+
+Not deleted by this stack:
+
+- Existing Artifact Registry repository (`eetr-artifacts`)
+- External source control integrations/connections created outside this Terraform stack
+
+Security note:
+
+- `db-secret.yaml` is not applied by kustomize anymore; the secret is managed by Terraform.
+- Keep Terraform state in a protected backend (for example, private GCS bucket with restricted IAM), because sensitive values can be represented in state.
+
 Contacts fields:
 
 - `name`

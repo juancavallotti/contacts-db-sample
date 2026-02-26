@@ -54,5 +54,3 @@ spec:
                 secretKeyRef:
                   name: contacts-db-secret
                   key: POSTGRES_PASSWORD
-      nodeSelector:
-        kubernetes.io/hostname: minikube-m02

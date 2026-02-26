@@ -9,6 +9,12 @@ Next.js 16 + Tailwind CSS contacts CRUD app using:
   - Application: `src/application`
   - Persistence: `src/persistence`
 
+## Kubernetes
+
+For a repo-specific explanation of the Kubernetes setup and concepts used here, see:
+
+- `KUBERNETES_CONCEPTS.md`
+
 Contacts fields:
 
 - `name`

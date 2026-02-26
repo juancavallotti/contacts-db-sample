@@ -18,8 +18,41 @@ spec:
           imagePullPolicy: Never
           env:
             - name: APP_DB_ENGINE
-              value: postgres
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: APP_DB_ENGINE
             - name: POSTGRES_DATABASE_URL
-              value: postgresql://postgres:example@postgres-rw:5432/contacts?schema=public
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_NAME
+            - name: DB_SCHEMA
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: DB_SCHEMA
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: contacts-db-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: contacts-db-secret
+                  key: POSTGRES_PASSWORD
       nodeSelector:
         kubernetes.io/hostname: minikube-m02

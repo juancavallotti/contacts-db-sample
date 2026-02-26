@@ -41,6 +41,7 @@ Set at minimum:
 - `project_id` (your GCP project)
 - `artifact_repo_path` (defaults to `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts`)
 - `cloud_build_runner_account_id` (service account id used by the trigger)
+- `deploy_environment` (`dev` or `prod`, selects `k8s/overlays/<environment>`)
 - `db_password` (used by Terraform to create `contacts-db-secret` in the cluster)
 
 #### 2) Create infra
@@ -68,7 +69,7 @@ On push to `main`, Cloud Build (`cloudbuild.yaml`) will:
 1. Build image: `${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}`
 2. Push image to Artifact Registry
 3. Get GKE credentials
-4. `kubectl apply -k .`
+4. `kubectl apply -k ${_K8S_OVERLAY_PATH}` (set by Terraform from `deploy_environment`)
 5. `kubectl set image deployment/contacts ...:${SHORT_SHA}`
 6. Wait for rollout success
 

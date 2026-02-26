@@ -37,3 +37,8 @@ output "contacts_dns_fqdn" {
   description = "FQDN configured for contacts DNS A record."
   value       = google_dns_record_set.contacts_a_record.name
 }
+
+output "deploy_environment" {
+  description = "Environment selected for Cloud Build Kubernetes overlay deployment."
+  value       = var.deploy_environment
+}

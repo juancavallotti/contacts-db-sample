@@ -6,33 +6,40 @@ The manifests in `k8s/` are focused on workload and networking resources. The da
 
 ## 1) Kustomization (resource composition)
 
-File: `kustomization.yaml`
+Files: `kustomization.yaml`, `overlays/dev/kustomization.yaml`, `overlays/prod/kustomization.yaml`
 
 `Kustomization` is the entrypoint that bundles multiple manifests into one deployable set.
 
-- It lists the resources to apply together: config, secret, services, stateful workload, and app workload.
+- Root `k8s/kustomization.yaml` points to `overlays/prod` (default production apply target).
+- `overlays/dev` is a SQLite setup for local/dev clusters:
+  - app `Deployment` with `APP_DB_ENGINE=sqlite`
+  - `SQLITE_DATABASE_URL=file:../data/contacts.db`
+  - `sqlite-pvc` mounted at `/app/prisma/data`
+- `overlays/prod` contains the current Postgres-based setup (config map, services, stateful DB, app deployment, ingress, managed cert).
 - Typical usage:
 
 ```bash
-kubectl apply -k .
+kubectl apply -k k8s/overlays/dev
+kubectl apply -k k8s/overlays/prod
 ```
 
 ## 2) Deployment (stateless app replicas)
 
-File: `deployment.yaml` (resource name: `contacts`)
+Files: `overlays/dev/deployment.yaml`, `overlays/prod/deployment.yaml` (resource name: `contacts`)
 
 `Deployment` manages stateless app Pods and keeps the desired replica count running.
 
-- `replicas: 3` means Kubernetes schedules three app Pods.
+- `overlays/prod` uses `replicas: 3`; `overlays/dev` uses `replicas: 1`.
 - `selector.matchLabels` and Pod template `labels` (`app: contacts`) tie the Deployment to its Pods.
-- The container reads database configuration from `ConfigMap` + `Secret`.
+- In prod, the container reads DB config from `ConfigMap` + `Secret`.
+- In dev, the container uses SQLite env vars directly (`APP_DB_ENGINE=sqlite`, `SQLITE_DATABASE_URL=file:../data/contacts.db`).
 - The image is pulled from Artifact Registry:
   - `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest`
 - This manifest does not currently set `nodeSelector` or `imagePullPolicy`, so normal cluster scheduling and default image pull behavior apply.
 
 ## 3) StatefulSet (stateful database workload)
 
-File: `statefulset.yaml` (resource name: `postgres`)
+File: `overlays/prod/statefulset.yaml` (resource name: `postgres`)
 
 `StatefulSet` is used for stateful services like databases that need stable identity and persistent storage.
 
@@ -43,7 +50,7 @@ File: `statefulset.yaml` (resource name: `postgres`)
 
 ## 4) Services (internal networking and discovery)
 
-Files: `contacts-service.yaml`, `service.yaml`, `postgres-service.yaml`
+Files: `overlays/dev/contacts-service.yaml`, `overlays/prod/contacts-service.yaml`, `overlays/prod/service.yaml`, `overlays/prod/postgres-service.yaml`
 
 This repo uses two service patterns:
 
@@ -60,7 +67,7 @@ Both services route traffic using `selector: app: postgres`.
 
 ## 5) ConfigMap (non-secret configuration)
 
-File: `db-configmap.yaml` (resource name: `contacts-db-config`)
+File: `overlays/prod/db-configmap.yaml` (resource name: `contacts-db-config`)
 
 `ConfigMap` stores plain-text configuration data consumed by Pods.
 
@@ -77,7 +84,7 @@ The app and database manifests consume these values with `configMapKeyRef`.
 
 ## 6) Secret (sensitive configuration)
 
-Resource: `contacts-db-secret` (consumed in `deployment.yaml` and `statefulset.yaml`)
+Resource: `contacts-db-secret` (consumed in `overlays/prod/deployment.yaml` and `overlays/prod/statefulset.yaml`)
 
 `Secret` stores sensitive values, in this case `POSTGRES_PASSWORD`.
 
@@ -87,9 +94,9 @@ Resource: `contacts-db-secret` (consumed in `deployment.yaml` and `statefulset.y
 
 ## 7) Environment variable wiring
 
-Mainly in: `deployment.yaml`
+Mainly in: `overlays/prod/deployment.yaml` and `overlays/dev/deployment.yaml`
 
-The app container combines values from config and secret into runtime env vars:
+In prod, the app container combines values from config and secret into runtime env vars:
 
 - Individual fields (`DB_HOST`, `DB_PORT`, etc.) come from `ConfigMap`.
 - Password comes from `Secret`.
@@ -99,15 +106,14 @@ The app container combines values from config and secret into runtime env vars:
 postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)
 ```
 
-This pattern decouples app image from environment-specific database endpoints.
+This pattern decouples app image from environment-specific database endpoints. In dev, SQLite is configured directly in the deployment manifest.
 
 ## 8) Persistent storage patterns in this repo
 
-Files: `statefulset.yaml`, `pvc.yaml`
+Files: `overlays/prod/statefulset.yaml`, `overlays/dev/pvc.yaml`
 
-- Active DB persistence is implemented with `StatefulSet.volumeClaimTemplates`.
-- There is also a standalone `PersistentVolumeClaim` in `pvc.yaml` (`sqlite-pvc`) that requests `64Mi`.
-- Important: `pvc.yaml` exists but is not currently included in `kustomization.yaml`, so it is not applied by `kubectl apply -k .` unless applied separately.
+- Prod DB persistence is implemented with `StatefulSet.volumeClaimTemplates`.
+- Dev SQLite persistence is implemented with `sqlite-pvc` in `overlays/dev/pvc.yaml`, mounted by the dev app deployment.
 
 ## 9) Label selectors and workload-to-service routing
 
@@ -119,8 +125,11 @@ A consistent `app` label ties objects together:
 
 ## 10) Operational notes for this project
 
-- Local default (`.env`) is SQLite (`APP_DB_ENGINE=sqlite`), while Kubernetes manifests are wired for Postgres (`APP_DB_ENGINE=postgres` in `ConfigMap`).
-- To run in Kubernetes, ensure the app image in `deployment.yaml` is available to cluster nodes.
+- Local default (`.env`) is SQLite (`APP_DB_ENGINE=sqlite`).
+- Kubernetes now has two overlays:
+  - `dev`: SQLite + PVC (no Postgres StatefulSet/Ingress resources).
+  - `prod`: Postgres + StatefulSet + ingress/certificate resources.
+- To run in Kubernetes, ensure the app image in the selected overlay deployment is available to cluster nodes.
 - Ensure `contacts-db-secret` exists in the target namespace before deploying app/database workloads.
 - The app-to-db dependency is represented through service DNS (`postgres-rw:5432`) rather than hardcoded Pod IPs.
 - The app now redacts DB credentials server-side before display/logging:
@@ -130,7 +139,7 @@ A consistent `app` label ties objects together:
 
 ## 11) Ingress and managed TLS
 
-Files: `ingress.yaml`, `managed-certificate.yaml`
+Files: `overlays/prod/ingress.yaml`, `overlays/prod/managed-certificate.yaml`
 
 - `Ingress` (`contacts-ingress`) routes `contacts.eetr.app` to service `contacts` on port `80`.
 - GCE annotations configure:
@@ -144,11 +153,16 @@ Files: `ingress.yaml`, `managed-certificate.yaml`
 Use these to inspect what was applied and validate concept understanding:
 
 ```bash
-# Apply all resources in kustomization.yaml
-kubectl apply -k .
+# Apply dev or prod overlays
+kubectl apply -k k8s/overlays/dev
+kubectl apply -k k8s/overlays/prod
 
 # List main resources
 kubectl get deploy,statefulset,svc,configmap,secret,ingress,managedcertificate,pvc
+
+# Render overlays without applying
+kubectl kustomize k8s/overlays/dev
+kubectl kustomize k8s/overlays/prod
 
 # Inspect app deployment config and env wiring
 kubectl describe deployment contacts

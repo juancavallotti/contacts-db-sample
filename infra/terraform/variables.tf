@@ -51,6 +51,17 @@ variable "trigger_branch_regex" {
   default     = "^main$"
 }
 
+variable "deploy_environment" {
+  description = "Kubernetes deployment environment. Valid values: dev or prod."
+  type        = string
+  default     = "prod"
+
+  validation {
+    condition     = contains(["dev", "prod"], var.deploy_environment)
+    error_message = "deploy_environment must be either \"dev\" or \"prod\"."
+  }
+}
+
 variable "dns_managed_zone" {
   description = "Existing Cloud DNS managed zone name for eetr.app."
   type        = string

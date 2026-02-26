@@ -19,6 +19,7 @@ resource "google_cloudbuild_trigger" "main_push" {
     _IMAGE_NAME         = var.image_name
     _CLUSTER_NAME       = google_container_cluster.autopilot.name
     _CLUSTER_REGION     = google_container_cluster.autopilot.location
+    _K8S_OVERLAY_PATH   = "k8s/overlays/${var.deploy_environment}"
   }
 
   depends_on = [

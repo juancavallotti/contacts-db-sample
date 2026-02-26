@@ -51,6 +51,24 @@ variable "trigger_branch_regex" {
   default     = "^main$"
 }
 
+variable "dns_managed_zone" {
+  description = "Existing Cloud DNS managed zone name for eetr.app."
+  type        = string
+  default     = "eetr-app"
+}
+
+variable "contacts_dns_name" {
+  description = "FQDN for contacts app DNS record (must end with a dot)."
+  type        = string
+  default     = "contacts.eetr.app."
+}
+
+variable "ingress_static_ip_name" {
+  description = "Global static IP resource name used by GKE ingress."
+  type        = string
+  default     = "contacts-static-ip"
+}
+
 variable "db_password" {
   description = "Database password used for contacts-db-secret in Kubernetes."
   type        = string

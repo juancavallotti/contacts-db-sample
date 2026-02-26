@@ -58,6 +58,8 @@ Terraform creates:
 - `google_cloudbuild_trigger` for `main` pushes
 - Dedicated service account + custom IAM role required by Cloud Build
 - `kubernetes_secret_v1.contacts_db_secret` (`contacts-db-secret`)
+- `google_compute_global_address.contacts_ingress` (reserved global static IP for ingress)
+- `google_dns_record_set.contacts_a_record` (`contacts.eetr.app` A record)
 
 #### 3) CI/CD flow
 
@@ -76,7 +78,17 @@ On push to `main`, Cloud Build (`cloudbuild.yaml`) will:
 gcloud container clusters get-credentials contacts-autopilot --region us-west1 --project <project_id>
 kubectl get pods,svc
 kubectl rollout status deployment/contacts
+kubectl get ingress contacts-ingress
+kubectl get managedcertificate contacts-cert
+terraform output ingress_static_ip_address
+dig +short contacts.eetr.app
 ```
+
+Expected checks:
+
+- `kubectl get ingress contacts-ingress` shows the same external IP as `terraform output ingress_static_ip_address`.
+- `dig +short contacts.eetr.app` resolves to that same IP (DNS propagation can take a few minutes).
+- `kubectl get managedcertificate contacts-cert` eventually reports status `Active`.
 
 #### 5) Teardown
 
